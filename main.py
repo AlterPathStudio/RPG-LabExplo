@@ -1,4 +1,4 @@
-# game.py — Commit 3
+# mais.py — Mini RPG Tkinter avec nouvelle fonctionnalité (PV + pièges)
 import tkinter as tk
 from tkinter import messagebox
 
@@ -8,7 +8,7 @@ RAW_MAP = [
     "#..*........TT......H..H..D#",
     "#...######..TT......H..H...#",
     "#...#....#..........HHHH...#",
-    "#...#....#....N...........##",
+    "#...#....#....N......X....##",  # X = piège
     "#...#....#.................#",
     "#...#....#..TT..====......#",
     "#...######..TT..=..=..HH..#",
@@ -35,6 +35,7 @@ C_NPC = "#50a8d8"
 C_PLAYER = "#deb64f"
 C_ITEM = "#f4e36b"
 C_DOOR = "#b99f6b"
+C_TRAP = "#cc3333"
 C_PANEL = "#1a1b20"
 C_PANEL_BORDER = "#585b66"
 C_TEXT = "#ebebf2"
@@ -43,10 +44,11 @@ C_TEXT = "#ebebf2"
 BLOCKED_ALWAYS = {'#','H','T','='}
 DOOR = 'D'
 ITEM = '*'
+TRAP = 'X'
 
 # PNJ
 NPCS = {
-    (12,4): ["Salut encore!", "Collecte les 3 * dans le village.", "La porte 'D' s'ouvrira ensuite."],
+    (12,4): ["Salut encore!", "Collecte les 3 * dans le village.", "Attention aux pièges X !"],
     (24,10): ["Tu cherches des étoiles? J'en ai vu près des arbres."],
     (23,13): ["La sortie est au nord-est. Il te faut 3 *."],
 }
@@ -54,7 +56,7 @@ NPCS = {
 class Game:
     def __init__(self, root):
         self.root = root
-        root.title("Mini RPG - Commit 3 (Tkinter)")
+        root.title("Mini RPG - Ajout PV & pièges")
         self.canvas = tk.Canvas(root, width=SCREEN_W, height=SCREEN_H, bg=C_BG, highlightthickness=0)
         self.canvas.pack()
         self.grid = [list(r) for r in RAW_MAP]
@@ -62,6 +64,9 @@ class Game:
 
         self.items_needed = 3
         self.items_collected = 0
+
+        # Nouvelle fonctionnalité : points de vie
+        self.hp = 5
 
         self.dialog_active = False
         self.dialog_lines = []
@@ -96,6 +101,11 @@ class Game:
             self.grid[y][x] = '.'  # ramassé
             self.draw_world()
             self.toast(f"Tu as ramassé une étoile! ({self.items_collected}/{self.items_needed})")
+        elif tile == TRAP:
+            self.hp -= 1
+            self.toast(f"Ouch ! Un piège ! PV restants : {self.hp}")
+            if self.hp <= 0:
+                self.game_over()
         elif tile == DOOR and self.items_collected >= self.items_needed:
             self.victory()
 
@@ -157,6 +167,9 @@ class Game:
             self.canvas.create_oval(x0+10, y0+10, x1-10, y1-10, fill=C_ITEM, width=0)
         elif ch == DOOR:
             self.canvas.create_rectangle(x0, y0, x1, y1, fill=C_DOOR, width=0)
+        elif ch == TRAP:
+            self.canvas.create_rectangle(x0, y0, x1, y1, fill=C_FLOOR, width=0)
+            self.canvas.create_text(x0+TILE//2, y0+TILE//2, text="X", fill=C_TRAP, font=("Arial", 16, "bold"))
         else:
             self.canvas.create_rectangle(x0, y0, x1, y1, fill=C_FLOOR, width=0)
 
@@ -179,18 +192,21 @@ class Game:
         self.canvas.create_rectangle(x0, y0, x0+TILE-8, y0+TILE-8, fill=C_PLAYER, width=0)
         # HUD
         self.canvas.create_text(8, 8,
-            text=f"WASD/Flèches: bouger • E: parler • Étoiles: {self.items_collected}/{self.items_needed}",
+            text=f"Étoiles: {self.items_collected}/{self.items_needed} • PV: {self.hp}",
             anchor="nw", fill=C_TEXT, font=("Arial", 11))
         if self.dialog_active:
             self.draw_dialog()
 
     # --- UX ---
     def toast(self, msg):
-        # petit hint rapide en haut (disparaît à la frame suivante, mais suffisant ici)
         self.canvas.create_text(SCREEN_W//2, 28, text=msg, fill="#fff", font=("Arial", 12, "bold"))
 
     def victory(self):
         messagebox.showinfo("Victoire!", "La porte s'ouvre... Tu as gagné! 🎉")
+        self.root.destroy()
+
+    def game_over(self):
+        messagebox.showerror("Game Over", "Tu n'as plus de points de vie... 💀")
         self.root.destroy()
 
 def main():
