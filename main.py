@@ -211,6 +211,7 @@ class Game:
 
 
 def main():
+    exit()
     root = tk.Tk()
     Game(root)
     root.mainloop()
