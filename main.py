@@ -1,86 +1,160 @@
-# game.py — Commit 1
+# game.py — Commit 2
 import tkinter as tk
 
 TILE = 32
 RAW_MAP = [
-    "####################",
-    "#..................#",
-    "#..................#",
-    "#..................#",
-    "#..................#",
-    "#..................#",
-    "#..................#",
-    "#..................#",
-    "#..................#",
-    "#..................#",
-    "#..................#",
-    "####################",
+    "############################",
+    "#...........TT......H..H...#",
+    "#...######..TT......H..H...#",
+    "#...#....#..........HHHH...#",
+    "#...#....#....N...........##",
+    "#...#....#.................#",
+    "#...#....#..TT..====......#",
+    "#...######..TT..=..=..HH..#",
+    "#...............=..=..HH..#",
+    "#..H..H..........=..=.....#",
+    "#..H..H...........====..N.#",
+    "#.............TT.........##",
+    "#..TT........TT..........#",
+    "#.......................N#",
+    "#.........................#",
+    "############################",
 ]
 H, W = len(RAW_MAP), len(RAW_MAP[0])
 SCREEN_W, SCREEN_H = W*TILE, H*TILE
 
-COLOR_BG = "#121216"
-COLOR_FLOOR = "#32343c"
-COLOR_WALL = "#677189"
-COLOR_PLAYER = "#deb64f"
-COLOR_TEXT = "#e6e6eb"
+# Couleurs
+C_BG = "#121216"
+C_FLOOR = "#373a43"
+C_WALL = "#6a738c"
+C_TREE = "#2e6648"
+C_FENCE = "#9b8a67"
+C_HOUSE = "#7b6161"
+C_NPC = "#50a8d8"
+C_PLAYER = "#deb64f"
+C_PANEL = "#1a1b20"
+C_PANEL_BORDER = "#585b66"
+C_TEXT = "#ebebf2"
 
-BLOCKED = {'#'}
+# Collisions
+BLOCKED = {'#','H','T','='}
+
+# PNJ
+NPCS = {
+    (12,4): ["Salut!", "Bienvenue au village de Demoiselle.", "Appuie sur E près d'un PNJ pour parler."],
+    (24,10): ["Le forgeron est en congé aujourd'hui.", "Reviens demain... ou pas!"],
+    (23,13): ["On dit qu'il y a des objets cachés en ville...", "Mais ce sera pour plus tard."],
+}
 
 class Game:
     def __init__(self, root):
         self.root = root
-        root.title("Mini RPG - Commit 1 (Tkinter)")
-        self.canvas = tk.Canvas(root, width=SCREEN_W, height=SCREEN_H, bg=COLOR_BG, highlightthickness=0)
+        root.title("Mini RPG - Commit 2 (Tkinter)")
+        self.canvas = tk.Canvas(root, width=SCREEN_W, height=SCREEN_H, bg=C_BG, highlightthickness=0)
         self.canvas.pack()
         self.grid = [list(r) for r in RAW_MAP]
         self.px, self.py = 2, 2
 
-        # Bind clavier
-        for k in ["<Up>", "<Down>", "<Left>", "<Right>", "w", "a", "s", "d", "z", "q"]:
+        # état de dialogue
+        self.dialog_active = False
+        self.dialog_lines = []
+        self.dialog_index = 0
+
+        # Bind
+        for k in ["<Up>", "<Down>", "<Left>", "<Right>", "w", "a", "s", "d", "z", "q", "e", "<Return>"]:
             root.bind(k, self.on_key)
 
         self.draw_world()
 
+    # --- logique ---
+    def in_bounds(self, x, y): return 0 <= x < W and 0 <= y < H
     def can_walk(self, x, y):
-        if x < 0 or y < 0 or x >= W or y >= H:
-            return False
-        return self.grid[y][x] not in BLOCKED
+        return self.in_bounds(x,y) and self.grid[y][x] not in BLOCKED
 
+    def adjacent_npc(self, x, y):
+        for dx,dy in ((0,1),(0,-1),(1,0),(-1,0)):
+            p = (x+dx, y+dy)
+            if p in NPCS: return p
+        return None
+
+    # --- input ---
     def on_key(self, event):
         key = event.keysym.lower()
+        if self.dialog_active:
+            if key in ("return","e"):
+                self.dialog_index += 1
+                if self.dialog_index >= len(self.dialog_lines):
+                    self.dialog_active = False
+                self.draw_world()
+            return
+
         dx = dy = 0
-        if key in ("up", "w", "z"):
+        if key in ("up","w","z"):
             dy = -1
-        elif key in ("down", "s"):
+        elif key in ("down","s"):
             dy = 1
-        elif key in ("left", "a", "q"):
+        elif key in ("left","a","q"):
             dx = -1
-        elif key in ("right", "d"):
+        elif key in ("right","d"):
             dx = 1
+        elif key == "e":
+            npc_pos = self.adjacent_npc(self.px, self.py)
+            if npc_pos:
+                self.dialog_active = True
+                self.dialog_lines = NPCS[npc_pos][:]
+                self.dialog_index = 0
+                self.draw_world()
+            return
+
         nx, ny = self.px + dx, self.py + dy
         if dx or dy:
             if self.can_walk(nx, ny):
                 self.px, self.py = nx, ny
                 self.draw_world()
 
+    # --- rendu ---
+    def draw_tile(self, x, y, ch):
+        x0, y0 = x*TILE, y*TILE
+        x1, y1 = x0+TILE, y0+TILE
+        if ch == '#':
+            self.canvas.create_rectangle(x0, y0, x1, y1, fill=C_WALL, width=0)
+        elif ch == 'T':
+            self.canvas.create_rectangle(x0, y0, x1, y1, fill=C_FLOOR, width=0)
+            self.canvas.create_rectangle(x0+6, y0+4, x1-6, y1-4, fill=C_TREE, width=0)
+        elif ch == '=':
+            self.canvas.create_rectangle(x0, y0, x1, y1, fill=C_FLOOR, width=0)
+            self.canvas.create_rectangle(x0+6, y0+12, x1-6, y0+20, fill=C_FENCE, width=0)
+        elif ch == 'H':
+            self.canvas.create_rectangle(x0, y0, x1, y1, fill=C_HOUSE, width=0)
+        elif ch == 'N':
+            self.canvas.create_rectangle(x0, y0, x1, y1, fill=C_FLOOR, width=0)
+            self.canvas.create_oval(x0+8, y0+8, x1-8, y1-8, fill=C_NPC, width=0)
+        else:
+            self.canvas.create_rectangle(x0, y0, x1, y1, fill=C_FLOOR, width=0)
+
+    def draw_dialog(self):
+        # panneau bas
+        panel_h = TILE*3
+        y0 = SCREEN_H - panel_h
+        self.canvas.create_rectangle(0, y0, SCREEN_W, SCREEN_H, fill=C_PANEL, outline=C_PANEL_BORDER, width=2)
+        text = self.dialog_lines[self.dialog_index]
+        self.canvas.create_text(16, y0+14, text=f'PNJ: "{text}"', anchor="nw", fill=C_TEXT, font=("Arial", 14))
+        self.canvas.create_text(16, SCREEN_H-22, text="[Entrée] pour continuer • [E] pour fermer",
+                                anchor="nw", fill="#c8c8d1", font=("Arial", 11))
+
     def draw_world(self):
         self.canvas.delete("all")
-        # tuiles
-        for y, row in enumerate(self.grid):
-            for x, ch in enumerate(row):
-                x0, y0 = x*TILE, y*TILE
-                x1, y1 = x0+TILE, y0+TILE
-                if ch == '#':
-                    self.canvas.create_rectangle(x0, y0, x1, y1, fill=COLOR_WALL, width=0)
-                else:
-                    self.canvas.create_rectangle(x0, y0, x1, y1, fill=COLOR_FLOOR, width=0)
+        for y,row in enumerate(self.grid):
+            for x,ch in enumerate(row):
+                self.draw_tile(x,y,ch)
         # joueur
         x0, y0 = self.px*TILE+4, self.py*TILE+4
-        self.canvas.create_rectangle(x0, y0, x0+TILE-8, y0+TILE-8, fill=COLOR_PLAYER, width=0)
+        self.canvas.create_rectangle(x0, y0, x0+TILE-8, y0+TILE-8, fill=C_PLAYER, width=0)
         # HUD
-        self.canvas.create_text(8, 8, text="WASD/Flèches pour bouger • Fermer la fenêtre pour quitter",
-                                anchor="nw", fill=COLOR_TEXT, font=("Arial", 11))
+        self.canvas.create_text(8, 8, text="WASD/Flèches: bouger • E: parler • Entrée: suite • Fermer = quitter",
+                                anchor="nw", fill=C_TEXT, font=("Arial", 11))
+        if self.dialog_active:
+            self.draw_dialog()
 
 def main():
     root = tk.Tk()
