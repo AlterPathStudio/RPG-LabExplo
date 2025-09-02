@@ -209,6 +209,7 @@ class Game:
         messagebox.showerror("Game Over", "Tu n'as plus de points de vie... 💀")
         self.root.destroy()
 
+
 def main():
     root = tk.Tk()
     Game(root)
