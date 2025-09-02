@@ -1,19 +1,20 @@
-# game.py — Commit 2
+# game.py — Commit 3
 import tkinter as tk
+from tkinter import messagebox
 
 TILE = 32
 RAW_MAP = [
     "############################",
-    "#...........TT......H..H...#",
+    "#..*........TT......H..H..D#",
     "#...######..TT......H..H...#",
     "#...#....#..........HHHH...#",
     "#...#....#....N...........##",
     "#...#....#.................#",
     "#...#....#..TT..====......#",
     "#...######..TT..=..=..HH..#",
-    "#...............=..=..HH..#",
+    "#..*............=..=..HH..#",
     "#..H..H..........=..=.....#",
-    "#..H..H...........====..N.#",
+    "#..H..H......*....====..N.#",
     "#.............TT.........##",
     "#..TT........TT..........#",
     "#.......................N#",
@@ -32,35 +33,40 @@ C_FENCE = "#9b8a67"
 C_HOUSE = "#7b6161"
 C_NPC = "#50a8d8"
 C_PLAYER = "#deb64f"
+C_ITEM = "#f4e36b"
+C_DOOR = "#b99f6b"
 C_PANEL = "#1a1b20"
 C_PANEL_BORDER = "#585b66"
 C_TEXT = "#ebebf2"
 
 # Collisions
-BLOCKED = {'#','H','T','='}
+BLOCKED_ALWAYS = {'#','H','T','='}
+DOOR = 'D'
+ITEM = '*'
 
 # PNJ
 NPCS = {
-    (12,4): ["Salut!", "Bienvenue au village de Demoiselle.", "Appuie sur E près d'un PNJ pour parler."],
-    (24,10): ["Le forgeron est en congé aujourd'hui.", "Reviens demain... ou pas!"],
-    (23,13): ["On dit qu'il y a des objets cachés en ville...", "Mais ce sera pour plus tard."],
+    (12,4): ["Salut encore!", "Collecte les 3 * dans le village.", "La porte 'D' s'ouvrira ensuite."],
+    (24,10): ["Tu cherches des étoiles? J'en ai vu près des arbres."],
+    (23,13): ["La sortie est au nord-est. Il te faut 3 *."],
 }
 
 class Game:
     def __init__(self, root):
         self.root = root
-        root.title("Mini RPG - Commit 2 (Tkinter)")
+        root.title("Mini RPG - Commit 3 (Tkinter)")
         self.canvas = tk.Canvas(root, width=SCREEN_W, height=SCREEN_H, bg=C_BG, highlightthickness=0)
         self.canvas.pack()
         self.grid = [list(r) for r in RAW_MAP]
         self.px, self.py = 2, 2
 
-        # état de dialogue
+        self.items_needed = 3
+        self.items_collected = 0
+
         self.dialog_active = False
         self.dialog_lines = []
         self.dialog_index = 0
 
-        # Bind
         for k in ["<Up>", "<Down>", "<Left>", "<Right>", "w", "a", "s", "d", "z", "q", "e", "<Return>"]:
             root.bind(k, self.on_key)
 
@@ -68,14 +74,30 @@ class Game:
 
     # --- logique ---
     def in_bounds(self, x, y): return 0 <= x < W and 0 <= y < H
+
     def can_walk(self, x, y):
-        return self.in_bounds(x,y) and self.grid[y][x] not in BLOCKED
+        if not self.in_bounds(x,y): return False
+        tile = self.grid[y][x]
+        if tile in BLOCKED_ALWAYS: return False
+        if tile == DOOR and self.items_collected < self.items_needed:
+            return False
+        return True
 
     def adjacent_npc(self, x, y):
         for dx,dy in ((0,1),(0,-1),(1,0),(-1,0)):
             p = (x+dx, y+dy)
             if p in NPCS: return p
         return None
+
+    def on_step(self, x, y):
+        tile = self.grid[y][x]
+        if tile == ITEM:
+            self.items_collected += 1
+            self.grid[y][x] = '.'  # ramassé
+            self.draw_world()
+            self.toast(f"Tu as ramassé une étoile! ({self.items_collected}/{self.items_needed})")
+        elif tile == DOOR and self.items_collected >= self.items_needed:
+            self.victory()
 
     # --- input ---
     def on_key(self, event):
@@ -110,6 +132,7 @@ class Game:
         if dx or dy:
             if self.can_walk(nx, ny):
                 self.px, self.py = nx, ny
+                self.on_step(self.px, self.py)
                 self.draw_world()
 
     # --- rendu ---
@@ -129,11 +152,15 @@ class Game:
         elif ch == 'N':
             self.canvas.create_rectangle(x0, y0, x1, y1, fill=C_FLOOR, width=0)
             self.canvas.create_oval(x0+8, y0+8, x1-8, y1-8, fill=C_NPC, width=0)
+        elif ch == ITEM:
+            self.canvas.create_rectangle(x0, y0, x1, y1, fill=C_FLOOR, width=0)
+            self.canvas.create_oval(x0+10, y0+10, x1-10, y1-10, fill=C_ITEM, width=0)
+        elif ch == DOOR:
+            self.canvas.create_rectangle(x0, y0, x1, y1, fill=C_DOOR, width=0)
         else:
             self.canvas.create_rectangle(x0, y0, x1, y1, fill=C_FLOOR, width=0)
 
     def draw_dialog(self):
-        # panneau bas
         panel_h = TILE*3
         y0 = SCREEN_H - panel_h
         self.canvas.create_rectangle(0, y0, SCREEN_W, SCREEN_H, fill=C_PANEL, outline=C_PANEL_BORDER, width=2)
@@ -151,10 +178,20 @@ class Game:
         x0, y0 = self.px*TILE+4, self.py*TILE+4
         self.canvas.create_rectangle(x0, y0, x0+TILE-8, y0+TILE-8, fill=C_PLAYER, width=0)
         # HUD
-        self.canvas.create_text(8, 8, text="WASD/Flèches: bouger • E: parler • Entrée: suite • Fermer = quitter",
-                                anchor="nw", fill=C_TEXT, font=("Arial", 11))
+        self.canvas.create_text(8, 8,
+            text=f"WASD/Flèches: bouger • E: parler • Étoiles: {self.items_collected}/{self.items_needed}",
+            anchor="nw", fill=C_TEXT, font=("Arial", 11))
         if self.dialog_active:
             self.draw_dialog()
+
+    # --- UX ---
+    def toast(self, msg):
+        # petit hint rapide en haut (disparaît à la frame suivante, mais suffisant ici)
+        self.canvas.create_text(SCREEN_W//2, 28, text=msg, fill="#fff", font=("Arial", 12, "bold"))
+
+    def victory(self):
+        messagebox.showinfo("Victoire!", "La porte s'ouvre... Tu as gagné! 🎉")
+        self.root.destroy()
 
 def main():
     root = tk.Tk()
