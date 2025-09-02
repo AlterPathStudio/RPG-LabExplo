@@ -2,6 +2,8 @@
 import tkinter as tk
 from tkinter import messagebox
 
+
+
 TILE = 32
 RAW_MAP = [
     "############################",
